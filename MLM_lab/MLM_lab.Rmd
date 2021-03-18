@@ -1,0 +1,161 @@
+---
+title: "MLM_lab"
+author: "Bruce Peng"
+date: "19/04/2020"
+output: html_document
+---
+Load packages and soure codes
+```{r}
+# install.packages('pacman')
+pacman::p_load(ggplot2, tidyverse, lme4, lmerTest)
+```
+
+
+# load our data
+
+The idea is that this lab will look at dataset 1 and 2, if they have time they move on to dataset 3
+All three datasts were simulated, all have a positive effect at the between-cluster level between x and y but differ in their within-cluster relationships, Each dataset have 10 clusters (i.e., participants) and 30 data points within each cluster
+- dataset 1 no within-cluster effect
+- dataset 2 negative within-cluster effect
+- dataset 3 negative within-cluster effect but if account for random slope no effect. 
+
+```{r}
+Simpson.df <- read.csv("Simpsons_paradox.csv", header = T)
+summary(Simpson.df)
+```
+
+We need to set the participants column to the correct data type (catgeory)
+
+```{r}
+Simpson.df$participant <- as.factor(Simpson.df$participant)
+```
+
+
+# Lets look at dataset 1
+
+We first need to subset the dataset 1 from Simpson.df
+```{r}
+dataset1 <- Simpson.df[Simpson.df$dataset == 'dataset1', ]
+```
+
+
+Plot the data (this does not account for the dependency (i.e., the participants) in our data structure
+```{r}
+ggplot(data = dataset1, aes(x = x, y = y)) +
+  geom_point() +
+  stat_smooth(method = "lm", se = FALSE, col = 'red') +
+  theme_minimal()
+```
+Run linear regression (which will produce misleading results the wrong way as we are assuming no dependencies in the data structure)
+```{r}
+mod_DS1 <- lm (y ~ x, data = dataset1 )
+summary(mod_DS1)
+```
+
+
+Running it using the "correct" way by aggregating the data (which is what most people)
+
+We do this by first calculate the averaged x and y values for each participant
+```{r}
+# Calculate the average for each participant
+dataset1 <- group_by(dataset1, participant)
+dataset1.avg <- summarise (dataset1, x_M = mean(x), y_M = mean(y))
+```
+
+Now we re-run the linear model with averaged data
+```{r}
+mod_DS1.avg <- lm(y_M ~ x_M, data = dataset1.avg)
+summary(mod_DS1.avg)
+```
+
+
+let's plot the results
+```{r}
+ggplot(data = dataset1.avg, aes(x = x_M, y = y_M)) +
+  geom_point() +
+  stat_smooth(method = "lm", se = FALSE, col = 'red') +
+  theme_minimal() +
+  xlab('Mean of X for each participant') +
+  ylab('Mean of Y for each participant')
+```
+
+We see that there was a positive relationship between x and y in both models. We then conclude that more alcohol we drink the higher our IQ, we can publish the results (Hooary). 
+
+
+
+
+Not too fast, we have just encountered the Simpson Paradoix. Let's plot the dependency in the data structure
+```{r}
+ggplot(data = dataset1, aes(x=x, y=y, color= participant)) +
+  geom_point() +
+  stat_smooth(method = "lm", se = FALSE) +
+  geom_abline(intercept = 25.06, slope = 1.84, col = 'red') +
+  theme_minimal()
+```
+See there relationship between x and y isn't so clear within each cluster
+
+By running a multilevel model, we are accounting for the dependencies in the data structure and the real relationship between x and y in each participant is revealed
+```{r}
+MLM_mod_DS1<- lmer (y ~ x + (1|participant), data = dataset1)
+summary(MLM_mod_DS1)
+```
+There no significant relation between x and y within each cluster. So if our research question is how x and y relate to each other at the within participant level if we do not account for the dependencies in the data structure we can falsely report that x and y are positively related within participant!!!
+
+
+# Lets look at dataset 2
+
+```{r}
+dataset2 <- Simpson.df[Simpson.df$dataset == 'dataset2', ]
+```
+
+
+Plot the data (not accounting for dependency)
+```{r}
+ggplot(data = dataset2, aes(x = x, y = y)) +
+  geom_point() +
+  stat_smooth(method = "lm", se = FALSE, col = 'red') +
+  theme_minimal()
+```
+run linear regression (the wrong way as we are assuming independence)
+```{r}
+mod_DS2 <- lm (y ~ x, data = dataset2 )
+summary(mod_DS2)
+```
+running it using the "correct" way by aggregating the data (which is what most people)
+```{r}
+dataset2 <- group_by(dataset2, participant)
+dataset2.avg <- summarise (dataset2,x_M = mean(x), y_M = mean (y))
+
+mod_DS2.avg <- lm (y_M ~ x_M, data = dataset2.avg)
+summary(mod_DS2.avg)
+```
+
+See the positive relationship remained even with aggregated data, we conclude that more alcohol we drink the higher our IQ, we can publish it now. 
+let's plot
+```{r}
+ggplot(data = dataset2.avg, aes(x = x_M, y = y_M)) +
+  geom_point() +
+  stat_smooth(method = "lm", se = FALSE, col = 'red') +
+  theme_minimal() +  
+  xlab('Mean of X for each participant') +
+  ylab('Mean of Y for each participant')
+```
+
+
+Let's plot the dependency
+```{r}
+ggplot(data = dataset2, aes(x = x, y = y, color = participant))+
+  geom_point() +
+  stat_smooth(method = "lm", se = FALSE) +
+  geom_abline(intercept = 51.05, slope = 2.84) +
+  theme_minimal()
+```
+See there isn't much effect going on within cluster
+
+The real correct of doing it via Multilevel modeling, we see that there the within cluster effect is negative
+```{r}
+MLM_mod_DS2<- lmer (y ~ x + (1|participant), data = dataset2)
+summary(MLM_mod_DS2)
+```
+
+Excercise: Repeat the process for dataset3.
