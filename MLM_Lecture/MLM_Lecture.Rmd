@@ -1,0 +1,179 @@
+---
+title: "MLM_lecture"
+author: "Bruce Peng"
+date: "17/05/2020"
+output: html_document
+---
+
+# Load necessary packages
+```{r}
+# install.packages('pacman')
+pacman::p_load(ggplot2, psych, knitr, tidyverse, rethinking, gridExtra)
+```
+
+
+# Berkeley admission data (Lecture)
+```{r}
+# Load the Berkeley admission data 
+data ("UCBadmit")
+berk.df <- UCBadmit
+
+# Set male as the reference group
+berk.df$applicant.gender <- relevel(berk.df$applicant.gender, ref = 'male')
+
+# Tally total admission, rejection, application and calculate % of admitted for each gender
+av_admit <- berk.df %>% group_by(applicant.gender) %>%
+                        summarise(admit = sum(admit), 
+                                  reject = sum(reject), 
+                                  applications = sum(applications)) %>%
+                        mutate(admit_percent = admit /applications)
+
+
+# Tally total admission, rejection, application and calculate % of admitted for each department
+admit_dept <- berk.df %>% group_by(dept) %>%
+                          summarise (admit = sum(admit), 
+                                     reject = sum(reject), 
+                                     applications = sum(applications)) %>%
+                          mutate(admit_percent = admit /applications)
+
+
+# calculate department admission for each gender
+berk.df$admit_percent <- UCBadmit$admit / UCBadmit$applications 
+
+# Generate tables of department and University admission rate by gender to see a difference in bias
+kable (berk.df[1:12,], caption = "Berkeley Admission: By Department")
+kable (av_admit[1:2,], caption = "Berkeley Admission")
+```
+## Visualize Berkeley admission data (Lecture)
+```{r}
+# Overall admission data in percentage by department 
+ggplot(data = berk.df, aes(x = dept, y = admit_percent, fill = applicant.gender)) +
+  geom_bar(stat = "identity", width = 0.7, position = position_dodge()) +
+  theme_minimal() +     
+  ylab("Admission rate") +
+  xlab ("Department") +
+  labs (fill = "Applicant gender") +
+  ylim(0,1)
+
+# Admission rate by deparatment 
+p1 <- ggplot(data = admit_dept, aes(x = dept, y = admit_percent)) +
+        geom_bar(stat = "identity", fill = "steelblue", width = 0.5) +
+        theme_minimal() +     
+        ylab("Admission Rate") +
+        xlab ("Department") +
+        ylim(0,1)
+
+# Overall admission data: number of applicants
+p2 <- ggplot(data = berk.df, aes(x = dept, y = applications, fill = applicant.gender)) +
+        geom_bar(stat = "identity", width = 0.7, position = position_dodge())+
+        theme_minimal() +     
+        ylab("Total Number of Applicants") +
+        xlab ("Department") +
+        labs (fill = "Applicant Gender") +
+        theme(legend.title = element_text(size = 7), 
+              legend.text = element_text(size = 7),
+              legend.key.size = unit(0.4, "lines"))
+
+grid.arrange(p2, p1, ncol = 2)
+```
+
+
+
+# Simulating simpson paradox: alcohol and IQ (Lecture)
+```{r}
+pacman::p_load (MASS)
+# Number of data points per person
+n <- 10
+
+# Simulate two variables that are negatively related for 7 participants with a positive relationship at the group level
+set.seed(1234)
+Anne_M <- c(4, 90) 
+Anne_Sigma <- matrix(c(1, -.4,-.4, 1),ncol = 2)
+Anne <- data.frame(mvrnorm(n = n, mu = Anne_M, Anne_Sigma, empirical = T))
+Anne$participant <- "Anne"
+
+set.seed(1234)
+Tom_M <- c(5, 93) 
+Tom_Sigma <- matrix(c(1, -.8,-.8, 1), ncol = 2)
+Tom <- data.frame(mvrnorm(n = n, mu = Tom_M, Tom_Sigma, empirical = T))
+Tom$participant <- "Tom"
+
+set.seed(1234)
+John_M <- c(7, 97)
+John_Sigma <- matrix(c(1, -1,-1, 1), ncol = 2)
+John <- data.frame(mvrnorm(n = n, mu = John_M, John_Sigma, empirical = T))
+John$participant <- "John"
+
+set.seed(1234)
+Jerry_M <- c(8, 100)
+Jerry_Sigma <- matrix(c(1, -.6,-.6, 1), ncol = 2)
+Jerry <- data.frame(mvrnorm(n = n, mu = Jerry_M, Jerry_Sigma, empirical = T))
+Jerry$participant <- "Jerry"
+
+set.seed(1234)
+Laura_M <- c(10, 105) 
+Laura_Sigma <- matrix(c(1, -.5,-.5, 1),ncol = 2)
+Laura <- data.frame(mvrnorm(n = n, mu = Laura_M, Laura_Sigma, empirical = T))
+Laura$participant <- "Laura"
+
+set.seed(1234)
+Mary_M <- c(13, 108) 
+Mary_Sigma <- matrix(c(1, -.7,-.7, 1), ncol = 2)
+Mary <- data.frame(mvrnorm(n = n, mu = Mary_M, Mary_Sigma, empirical = TRUE))
+Mary$participant <- "Mary"
+
+set.seed(1234)
+Steve_M <- c(15, 112) 
+Steve_Sigma <- matrix(c(1, -.9,-.9, 1), ncol = 2)
+Steve <- data.frame(mvrnorm(n = n, mu = Steve_M, Steve_Sigma, empirical=TRUE))
+Steve$participant <- "Steve"
+
+# Combine simulated data 
+Simp_paradox <- rbind.data.frame(Anne, Tom, John, Jerry, Laura, Mary, Steve)
+colnames(Simp_paradox) <- c("Alcohol_consumption", "IQ", "participant")
+```
+
+## Plot alcohol and IQ: Simpson's paradox
+```{r}
+# Plot overall
+ggplot(data = Simp_paradox, aes(x = Alcohol_consumption, y = IQ)) +
+  geom_point() +
+  stat_smooth(method = "lm", se = FALSE, col = 'black') +
+  theme_minimal() +
+  xlab('Alcohol Consumption')
+
+# plots cluster effects
+ggplot(data = Simp_paradox, aes(x = Alcohol_consumption, y = IQ, color = participant)) +
+  geom_point() +
+  stat_smooth(method = "lm", se = FALSE) +
+  geom_abline(intercept = 84.77, slope = 1.8) +
+  theme_minimal() +
+  xlab('Alcohol Consumption')
+
+# plot random intercept only model
+intercepts <- Simp_paradox %>% group_by(participant) %>%
+                               summarise (intercepts = mean (IQ))
+
+ggplot(data = Simp_paradox, aes(x = 1,y = IQ, color = participant)) +
+  geom_point() +
+  theme_minimal() + 
+  geom_hline(yintercept = intercepts$intercepts[1], color = "pink")+
+  geom_hline(yintercept = intercepts$intercepts[2], color = "darkgoldenrod")+
+  geom_hline(yintercept = intercepts$intercepts[3], color = "green")+
+  geom_hline(yintercept = intercepts$intercepts[4], color = "forestgreen")+
+  geom_hline(yintercept = intercepts$intercepts[5], color = "skyblue") +
+  geom_hline(yintercept = intercepts$intercepts[6], color = "purple") +
+  geom_hline(yintercept = intercepts$intercepts[7], color = "lightcoral")+
+  geom_hline(yintercept = mean(intercepts$intercepts), color = "black")
+```
+## Linear and multilevel models (lectures)
+```{r}
+# Model that assumes no clustering 
+single_level <- lm (IQ ~ Alcohol_consumption, data = Simp_paradox)
+summary (single_level)
+
+# Multilevel model
+pacman::p_load (lme4, lmerTest)
+multilevel <- lmer (IQ ~ Alcohol_consumption + (1|participant), data = Simp_paradox)
+summary(multilevel)
+```
