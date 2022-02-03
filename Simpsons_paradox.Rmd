@@ -1,0 +1,247 @@
+---
+title: "Berkeley_tables"
+author: "Bruce Peng"
+date: "17/05/2020"
+output: html_document
+---
+# Berkeley admission data (Lecture)
+```{r}
+pacman::p_load(ggplot2, psych, knitr, tidyverse, rethinking, gridExtra)
+data ("UCBadmit")
+berk.df<- UCBadmit
+
+berk.df$applicant.gender<- relevel(berk.df$applicant.gender, ref= 'male')
+
+# Unviversity admission by gender
+av_admit<- berk.df %>% 
+                        group_by(applicant.gender) %>%
+                        summarise (admit= sum (admit), reject= sum(reject), applications= sum (applications))
+av_admit$admit_percent <- av_admit$admit/av_admit$applications
+
+# Department admission rate combining both gender
+admit_dept<- berk.df %>% 
+                        group_by(dept) %>%
+                        summarise (admit= sum (admit), reject= sum(reject), applications= sum (applications))
+admit_dept$admit_percent <- admit_dept$admit/admit_dept$applications
+
+# department admission rate by gender
+berk.df$admit_percent<- UCBadmit$admit/UCBadmit$applications 
+
+# Generate tables of department and University admission rate by gender to see a difference in bias
+kable (berk.df[1:12,], caption= "Berkeley Admission: By Department")
+kable (av_admit[1:2,], caption= "Berkeley Admission")
+```
+# Plot Berkeley admission data (Lecture)
+```{r}
+# Overall admission data in percentage by department 
+ggplot (data = berk.df, aes(y=admit_percent, x=dept, fill=applicant.gender)) +
+  geom_bar(stat="identity", width=0.7, position=position_dodge())+
+  theme_minimal()+     
+  ylab("Admission rate")+
+  xlab ("Department")+
+  labs (fill="Applicant gender")+ylim(0,1)
+
+# Admission rate by deparatment 
+p1<-ggplot (data = admit_dept, aes(y=admit_percent, x=dept )) +
+  geom_bar(stat="identity",fill="steelblue", width=0.5)+
+  theme_minimal()+     
+  ylab("Admission rate")+
+  xlab ("Department")+ ylim(0,1)
+
+# Overall admission data: number of applicants
+p2<-ggplot (data = berk.df, aes(y=applications, x=dept, fill=applicant.gender)) +
+  geom_bar(stat="identity", width=0.7, position=position_dodge())+
+  theme_minimal()+     
+  ylab("Total number of applicants")+
+  xlab ("Department")+
+  labs (fill="Applicant gender")
+
+grid.arrange(p1, p2, ncol=2)
+```
+
+
+
+# Simulation of simpson paradox: alcohol and IQ (Lecture)
+```{r}
+library(MASS)
+# number of data points per person
+n <- 10
+# simulate data for 7 participants
+set.seed(1234)
+Anne_M <- c(4, 90) # means of each var
+Anne_Sigma <- matrix(c(1, -.4,-.4, 1),ncol=2)
+Anne <- data.frame(mvrnorm(n=n, mu=Anne_M, Anne_Sigma, empirical=TRUE))
+Anne$participant<- "Anne"
+
+set.seed(1234)
+Tom_M <- c(5, 93) # means of each var
+Tom_Sigma <- matrix(c(1, -.8,-.8, 1),ncol=2)
+Tom <- data.frame(mvrnorm(n=n, mu=Tom_M, Tom_Sigma, empirical=TRUE))
+Tom$participant<- "Tom"
+
+set.seed(1234)
+John_M <- c(7, 97) # means of each var
+John_Sigma <- matrix(c(1, -1,-1, 1),ncol=2)
+John <- data.frame(mvrnorm(n=n, mu=John_M, John_Sigma, empirical=TRUE))
+John$participant<- "John"
+
+set.seed(1234)
+Jerry_M <- c(8, 100) # means of each var
+Jerry_Sigma <- matrix(c(1, -.6,-.6, 1),ncol=2)
+Jerry <- data.frame(mvrnorm(n=n, mu=Jerry_M, Jerry_Sigma, empirical=TRUE))
+Jerry$participant<- "Jerry"
+
+set.seed(1234)
+Laura_M <- c(10, 105) # means of each var
+Laura_Sigma <- matrix(c(1, -.5,-.5, 1),ncol=2)
+Laura <- data.frame(mvrnorm(n=n, mu=Laura_M, Laura_Sigma, empirical=TRUE))
+Laura$participant<- "Laura"
+
+set.seed(1234)
+Mary_M <- c(13, 108) # means of each var
+Mary_Sigma <- matrix(c(1, -.7,-.7, 1),ncol=2)
+Mary <- data.frame(mvrnorm(n=n, mu=Mary_M, Mary_Sigma, empirical=TRUE))
+Mary$participant<- "Mary"
+
+set.seed(1234)
+Steve_M <- c(15, 112) 
+Steve_Sigma <- matrix(c(1, -.9,-.9, 1),ncol=2)
+Steve <- data.frame(mvrnorm(n=n, mu=Steve_M, Steve_Sigma, empirical=TRUE))
+Steve$participant<- "Steve"
+
+# combine simulated data 
+Simp_paradox<- rbind.data.frame(Anne, Tom,John,Jerry,Laura,Mary,Steve)
+colnames(Simp_paradox)<- c("Alcohol_consumption", "IQ", "participant")
+```
+
+## Plot alcohol and IQ: Simpson's paradox
+```{r}
+# Plot overall
+ggplot(data=Simp_paradox, aes(x=Alcohol_consumption, y=IQ))+
+  geom_point()+
+  stat_smooth(method="lm", se=FALSE, col='black')+
+  theme_minimal()
+
+# plots cluster
+ggplot(data=Simp_paradox, aes(x=Alcohol_consumption, y=IQ, color= participant) )+
+  geom_point()+
+  stat_smooth(method="lm", se=FALSE)+
+  geom_abline(intercept=84.77, slope=1.8)+
+  theme_minimal()
+
+# plot random intercept
+intercepts<-Simp_paradox%>% 
+                          group_by(participant)%>%
+                          summarise ( intercepts = mean (IQ))
+
+ggplot(data=Simp_paradox, aes(x=1,y=IQ, color= participant) )+
+  geom_point()+
+  theme_minimal()+ 
+  geom_hline(yintercept = intercepts$intercepts[1], color= "pink")+
+  geom_hline(yintercept = intercepts$intercepts[2], color= "darkgoldenrod")+
+  geom_hline(yintercept = intercepts$intercepts[3], color= "green")+
+  geom_hline(yintercept = intercepts$intercepts[4], color= "forestgreen")+
+  geom_hline(yintercept = intercepts$intercepts[5], color= "skyblue") +
+  geom_hline(yintercept = intercepts$intercepts[6], color= "purple") +
+  geom_hline(yintercept = intercepts$intercepts[7], color= "lightcoral")+
+  geom_hline(yintercept = mean(intercepts$intercepts), color= "black")
+```
+## Linear and multilevel models (lectures)
+```{r}
+no_cluster<- lm (IQ~Alcohol_consumption, data= Simp_paradox)
+summary (no_cluster)
+
+library(lme4); library (lmerTest)
+cluster<- lmer (IQ~Alcohol_consumption+ (1|participant), data = Simp_paradox)
+summary(cluster)
+```
+
+# Code to generate clustered data set for labs
+```{r}
+# I basically reran this until i got the nice datasets and saved it
+set.seed (99)
+y_int<- rnorm (1,mean =50)
+y_M<- 50
+x_M<- 0
+dat<- data.frame()
+participant<-1
+for (x in seq(1:10)){
+  y_int<- rnorm (1,mean =y_M)
+  m <- rnorm(1, mean =-2)
+  x <- rnorm (30, mean = x_M)
+  y<- y_int+ m*x + rnorm (30, 0)
+  within<- data.frame (x,y, rep(participant,30))
+  dat<- rbind.data.frame(dat, within)
+  y_M= y_M+10;x_M= x_M+2; participant = participant+1
+}
+
+colnames(dat)<- c('x','y', 'participant')
+dat$participant<- as.factor(dat$participant)
+
+ggplot(data=dat, aes(x=x, y=y) )+
+  geom_point()
+ggplot(data=dat, aes(x=x, y=y, color=participant) )+
+  geom_point()+stat_smooth(method="lm", se=FALSE)
+
+```
+
+# Lab materials
+```{r}
+# This file contains 3 simulated datasets student will work with dataset 1 and dataset 2, dataset 3 can be used if they want to. Each dataset contain 10 participants each with 30 trials, or 10 groups with 30 individuals
+Simspons.df<-read.csv("Simpsons_paradox.csv", header=T)
+#dataset 1-3 all show a positive effect at the population level between x and y but differ in their within-cluster relationships
+## dataset1 no within-cluster effect
+## dataset2 negative within-cluster effect
+## dataset3 negative within-cluster effect but if account for random slope no effect. 
+
+Simspons.df$participant<- as.factor(Simspons.df$participant)
+
+dataset1<- Simspons.df[Simspons.df$dataset=="dataset1",]
+dataset2<- Simspons.df[Simspons.df$dataset=="dataset2",]
+dataset3<- Simspons.df[Simspons.df$dataset=="dataset3",]
+```
+
+## plot each of the 3 datasets
+```{r}
+#no cluster effect 
+ggplot(data=dataset1, aes(x=x, y=y) )+
+  geom_point()+stat_smooth(method="lm", se=FALSE)
+ggplot(data=dataset2, aes(x=x, y=y) )+
+  geom_point()+stat_smooth(method="lm", se=FALSE)
+ggplot(data=dataset3, aes(x=x, y=y) )+
+  geom_point()+stat_smooth(method="lm", se=FALSE)
+
+
+# cluster effect
+ggplot(data=dataset1, aes(x=x, y=y, color= participant) )+
+  geom_point()+stat_smooth(method="lm", se=FALSE)
+ggplot(data=dataset2, aes(x=x, y=y, color= participant) )+
+  geom_point()+stat_smooth(method="lm", se=FALSE)
+ggplot(data=dataset3, aes(x=x, y=y, color= participant) )+
+  geom_point()+stat_smooth(method="lm", se=FALSE)
+```
+
+
+## model the three
+```{r}
+# no clustering 
+NC1<-lm(y~x, data= dataset1)
+NC2 <- lm(y~x, data= dataset2)
+NC3 <- lm(y~x, data= dataset3)
+summary (NC1); summary (NC2); summary(NC3)
+
+# Clustering 
+C1<- lmer(y~x+(1|participant), data= dataset1)
+C2<- lmer(y~x+(1|participant), data= dataset2)
+C3_noslope<- lmer(y~x+(1|participant), data= dataset3)
+C3_slope<- lmer(y~x+(x|participant), data= dataset3)
+summary(C1); summary(C2); summary(C3_noslope); summary(C3_slope)
+```
+
+
+
+
+
+
+
+
